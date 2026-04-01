@@ -132,6 +132,17 @@
             >
                 ← Voltar
             </a>
+            @if (session('team_id'))
+                <form action="{{ route('home.logout') }}" method="POST" class="inline-block ml-3">
+                    @csrf
+                    <button
+                        type="submit"
+                        class="px-6 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition font-bold"
+                    >
+                        Sair
+                    </button>
+                </form>
+            @endif
         </div>
     </div>
 
@@ -162,8 +173,8 @@
                 return;
             }
 
-            // Sort by correct answers (descending)
-            teams.sort((a, b) => b.correct_answers - a.correct_answers);
+            // Sort by score first and use correct answers as tie-breaker
+            teams.sort((a, b) => (b.score - a.score) || (b.correct_answers - a.correct_answers));
 
             container.innerHTML = teams.map((team, index) => {
                 const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '✨';
@@ -181,14 +192,13 @@
                             <div>
                                 <h3 class="text-xl font-bold text-gray-800">${team.name}</h3>
                                 ${winnerBadge}
-                                <p class="text-sm text-gray-600">Código: ${team.code}</p>
                             </div>
                         </div>
 
                         <div class="flex items-center gap-8">
                             <div class="text-right">
-                                <div class="text-3xl font-bold" style="color: ${team.color};">${team.correct_answers}</div>
-                                <p class="text-sm text-gray-600">de 10</p>
+                                <div class="text-3xl font-bold" style="color: ${team.color};">${team.score}</div>
+                                <p class="text-sm text-gray-600">pontos</p>
                             </div>
                             <div class="text-4xl ${medalClass}">${medal}</div>
                         </div>

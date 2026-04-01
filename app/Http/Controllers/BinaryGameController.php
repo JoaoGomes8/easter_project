@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Team;
 use App\Services\DatabaseQuizRepository;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 
 class BinaryGameController extends Controller
 {
@@ -54,14 +55,29 @@ class BinaryGameController extends Controller
             'answer' => 'required|string',
         ]);
 
+        $teamId = session('team_id');
+        if (!$teamId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Equipa não encontrada.'
+            ], 403);
+        }
+
+        $questions = collect($this->repository->getAllQuestions());
+        $teamAnswers = collect($this->repository->getTeamAnswers($teamId));
+
+        if (!$this->hasCompletedQuizPerfectly($questions, $teamAnswers)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Só podes vencer depois de responderes corretamente a todas as perguntas e completares o jogo da frase.'
+            ], 400);
+        }
+
         $answer = strtoupper(trim($request->input('answer')));
         $correctAnswer = 'PASCOA CESAE';
 
         if ($answer === $correctAnswer) {
-            $teamId = session('team_id');
-            if ($teamId) {
-                Team::where('id', $teamId)->update(['is_winner' => true]);
-            }
+            Team::where('id', $teamId)->update(['is_winner' => true]);
 
             return response()->json([
                 'success' => true,
@@ -117,6 +133,20 @@ class BinaryGameController extends Controller
 
         $char = chr(bindec($binary));
         return strtoupper($char);
+    }
+
+    private function hasCompletedQuizPerfectly(Collection $questions, Collection $teamAnswers): bool
+    {
+        if ($questions->isEmpty()) {
+            return false;
+        }
+
+        $correctQuestionIds = $teamAnswers
+            ->where('is_correct', true)
+            ->pluck('question_id')
+            ->unique();
+
+        return $correctQuestionIds->count() === $questions->count();
     }
 }
 

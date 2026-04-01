@@ -88,8 +88,22 @@ class HomeController extends Controller
             );
         }
 
-        session(['team_id' => $team['id'], 'team_name' => $team['name'], 'team_code' => $team['code']]);
+        session([
+            'team_id' => $team['id'],
+            'team_name' => $team['name'],
+            'team_code' => $team['code'],
+            'team_password' => strtoupper(trim((string) $teamPassword)),
+        ]);
 
         return redirect()->route('quiz.index');
+    }
+
+    public function logout(Request $request)
+    {
+        $request->session()->forget(['team_id', 'team_name', 'team_code', 'team_password']);
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        return redirect()->route('home');
     }
 }

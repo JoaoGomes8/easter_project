@@ -113,6 +113,55 @@
             color: #dc2626;
             display: block;
         }
+
+        .status-message.neutral {
+            background: #eff6ff;
+            color: #1d4ed8;
+            display: block;
+        }
+
+        .score-pill {
+            min-width: 140px;
+            border-radius: 1rem;
+            padding: 0.9rem 1.2rem;
+            background: linear-gradient(135deg, #eef2ff 0%, #dbeafe 100%);
+            border: 1px solid #bfdbfe;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(59, 130, 246, 0.12);
+        }
+
+        .score-feedback {
+            position: fixed;
+            top: 1.25rem;
+            right: 1.25rem;
+            z-index: 1200;
+            padding: 0.9rem 1.1rem;
+            border-radius: 0.9rem;
+            color: white;
+            font-weight: 700;
+            box-shadow: 0 14px 30px rgba(15, 23, 42, 0.22);
+            opacity: 0;
+            transform: translateY(-10px);
+            pointer-events: none;
+            transition: opacity 0.25s ease, transform 0.25s ease;
+        }
+
+        .score-feedback.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .score-feedback.positive {
+            background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
+        }
+
+        .score-feedback.negative {
+            background: linear-gradient(135deg, #dc2626 0%, #f97316 100%);
+        }
+
+        .score-feedback.neutral {
+            background: linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%);
+        }
     </style>
 </head>
 <body class="quiz-bg min-h-screen p-4 md:p-6">
@@ -124,9 +173,15 @@
                     <h1 class="text-3xl md:text-4xl font-bold text-purple-600">🎯 Páscoa & Programação Quiz</h1>
                     <p class="text-gray-600 mt-1">Equipa: <span class="font-bold text-purple-500">{{ $teamName }}</span></p>
                 </div>
-                <div class="text-center">
-                    <div id="progress" class="text-3xl md:text-4xl font-bold text-green-600">0/11</div>
-                    <p class="text-gray-600 text-sm">Respostas Corretas</p>
+                <div class="flex flex-wrap items-center gap-3">
+                    <div class="score-pill">
+                        <div id="score" class="text-3xl md:text-4xl font-bold text-blue-600">{{ $teamScore }}</div>
+                        <p class="text-gray-600 text-sm">Pontos</p>
+                    </div>
+                    <div class="score-pill">
+                        <div id="progress" class="text-3xl md:text-4xl font-bold text-green-600">0/11</div>
+                        <p class="text-gray-600 text-sm">Respostas Corretas</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -189,6 +244,15 @@
             >
                 📊 Pontuações
             </a>
+            <form action="{{ route('home.logout') }}" method="POST" class="inline-block">
+                @csrf
+                <button
+                    type="submit"
+                    class="px-6 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition font-bold"
+                >
+                    Sair
+                </button>
+            </form>
         </div>
     </div>
 
@@ -196,8 +260,9 @@
     <script>
         const CURRENT_TEAM_ID = {{ $teamId }};
         const TEAM_ANSWERS = @json($teamAnswers);
-        const TEAM_CORRECT_ANSWERS = TEAM_ANSWERS.filter(a => a.is_correct).length;
+        let TEAM_SCORE = {{ $teamScore }};
     </script>
+    <div id="scoreFeedback" class="score-feedback"></div>
     <div id="passwordModal" class="modal-overlay">
         <div class="modal-content">
             <button
@@ -531,10 +596,19 @@
             .then(response => response.json())
             .then(data => {
                 const statusMsg = document.getElementById('statusMessage');
+                updateScore(data.current_score ?? TEAM_SCORE);
+
+                if (data.already_solved) {
+                    statusMsg.className = 'status-message neutral';
+                    statusMsg.textContent = `✅ Esta pergunta já estava certa. Pontuação atual: ${TEAM_SCORE} pontos.`;
+                    showScoreFeedback(0, TEAM_SCORE, 'Pergunta já resolvida');
+                    document.getElementById('explanationBox').style.display = 'block';
+                    return;
+                }
 
                 if (data.is_correct) {
                     statusMsg.className = 'status-message correct';
-                    statusMsg.textContent = '✅ Correto! Parabéns!';
+                    statusMsg.textContent = `✅ Correto! Ganhaste ${formatScoreDelta(data.score_delta)}. Total: ${TEAM_SCORE} pontos.`;
                     document.getElementById('answerInput').disabled = true;
 
                     // Desabilitar radio buttons de múltipla escolha
@@ -564,6 +638,7 @@
                     `;
 
                     updateProgress();
+                    showScoreFeedback(data.score_delta, TEAM_SCORE, 'Resposta correta');
 
                     // Mostrar binário se existir
                     if (data.binary_code) {
@@ -581,7 +656,8 @@
                     });
                 } else {
                     statusMsg.className = 'status-message incorrect';
-                    statusMsg.textContent = '❌ Incorreto! Tente novamente.';
+                    statusMsg.textContent = `❌ Incorreto! Perdeste ${formatScoreDelta(data.score_delta)}. Total: ${TEAM_SCORE} pontos.`;
+                    showScoreFeedback(data.score_delta, TEAM_SCORE, 'Resposta incorreta');
                 }
 
                 document.getElementById('explanationBox').style.display = 'block';
@@ -603,6 +679,37 @@
             // Garante que cada equipa vê apenas suas respostas
             const correct = TEAM_ANSWERS.filter(a => a.is_correct).length;
             document.getElementById('progress').textContent = `${correct}/11`;
+        }
+
+        function updateScore(score) {
+            TEAM_SCORE = score;
+            document.getElementById('score').textContent = score;
+        }
+
+        function formatScoreDelta(delta) {
+            if (delta > 0) {
+                return `+${delta} pontos`;
+            }
+
+            if (delta < 0) {
+                return `${Math.abs(delta)} ${Math.abs(delta) === 1 ? 'ponto' : 'pontos'}`;
+            }
+
+            return '0 pontos';
+        }
+
+        function showScoreFeedback(delta, totalScore, label) {
+            const feedback = document.getElementById('scoreFeedback');
+            const tone = delta > 0 ? 'positive' : delta < 0 ? 'negative' : 'neutral';
+            const signal = delta > 0 ? `+${delta}` : delta < 0 ? `${delta}` : '0';
+
+            feedback.className = `score-feedback ${tone} show`;
+            feedback.textContent = `${label}: ${signal} pontos | Total ${totalScore}`;
+
+            clearTimeout(showScoreFeedback.timeoutId);
+            showScoreFeedback.timeoutId = setTimeout(() => {
+                feedback.classList.remove('show');
+            }, 2200);
         }
 
         // Close modal when clicking outside

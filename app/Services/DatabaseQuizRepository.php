@@ -8,6 +8,10 @@ use App\Models\Answer;
 
 class DatabaseQuizRepository
 {
+    private const CORRECT_ANSWER_POINTS = 10;
+    private const WRONG_MULTIPLE_CHOICE_PENALTY = -3;
+    private const WRONG_DIRECT_ANSWER_PENALTY = -1;
+
     // ===== QUESTIONS =====
     public function getAllQuestions()
     {
@@ -230,6 +234,7 @@ class DatabaseQuizRepository
             'color' => $color,
             'password' => $teamPassword,
             'correct_answers' => 0,
+            'score' => 0,
             'is_winner' => false,
         ]);
 
@@ -265,8 +270,31 @@ class DatabaseQuizRepository
             ->toArray();
     }
 
-    public function saveAnswer($teamId, $questionId, $userAnswer, $isCorrect)
+    public function saveAnswer($teamId, $questionId, $userAnswer, $isCorrect, array $question)
     {
+        $team = Team::find($teamId);
+        if (!$team) {
+            return [
+                'score_delta' => 0,
+                'score' => 0,
+                'already_solved' => false,
+            ];
+        }
+
+        $existingAnswer = Answer::where('team_id', $teamId)
+            ->where('question_id', $questionId)
+            ->first();
+
+        if ($existingAnswer && $existingAnswer->is_correct) {
+            return [
+                'score_delta' => 0,
+                'score' => (int) $team->score,
+                'already_solved' => true,
+            ];
+        }
+
+        $scoreDelta = $this->calculateScoreDelta($isCorrect, $question['question_type'] ?? null);
+
         // Remove existing answer if any
         Answer::where('team_id', $teamId)
             ->where('question_id', $questionId)
@@ -285,7 +313,18 @@ class DatabaseQuizRepository
             ->where('is_correct', true)
             ->count();
 
-        Team::find($teamId)->update(['correct_answers' => $correctCount]);
+        $team->update([
+            'correct_answers' => $correctCount,
+            'score' => $team->score + $scoreDelta,
+        ]);
+
+        $team->refresh();
+
+        return [
+            'score_delta' => $scoreDelta,
+            'score' => (int) $team->score,
+            'already_solved' => false,
+        ];
     }
 
     public function getTeamsProgress()
@@ -298,10 +337,22 @@ class DatabaseQuizRepository
                     'name' => $team->name,
                     'code' => $team->code,
                     'color' => $team->color,
+                    'score' => $team->score,
                     'correct_answers' => $team->correct_answers,
                     'is_winner' => (bool) $team->is_winner,
                 ];
             })
             ->toArray();
+    }
+
+    private function calculateScoreDelta(bool $isCorrect, ?string $questionType): int
+    {
+        if ($isCorrect) {
+            return self::CORRECT_ANSWER_POINTS;
+        }
+
+        return $questionType === 'multiple_choice'
+            ? self::WRONG_MULTIPLE_CHOICE_PENALTY
+            : self::WRONG_DIRECT_ANSWER_PENALTY;
     }
 }

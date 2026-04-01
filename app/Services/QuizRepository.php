@@ -6,6 +6,10 @@ use Illuminate\Support\Facades\File;
 
 class QuizRepository
 {
+    private const CORRECT_ANSWER_POINTS = 10;
+    private const WRONG_MULTIPLE_CHOICE_PENALTY = -3;
+    private const WRONG_DIRECT_ANSWER_PENALTY = -1;
+
     private $dataPath;
 
     public function __construct()
@@ -158,6 +162,7 @@ class QuizRepository
             'color' => $color,
             'password' => $teamPassword,
             'correct_answers' => 0,
+            'score' => 0,
             'created_at' => now()->toDateTimeString()
         ];
 
@@ -230,9 +235,20 @@ class QuizRepository
             ->toArray();
     }
 
-    public function saveAnswer($teamId, $questionId, $userAnswer, $isCorrect)
+    public function saveAnswer($teamId, $questionId, $userAnswer, $isCorrect, array $question)
     {
         $answers = $this->getAllAnswers();
+
+        $existingAnswer = collect($answers)
+            ->first(function ($answer) use ($teamId, $questionId) {
+                return $answer['team_id'] == $teamId && $answer['question_id'] == $questionId;
+            });
+
+        if (($existingAnswer['is_correct'] ?? false) === true) {
+            return true;
+        }
+
+        $scoreDelta = $this->calculateScoreDelta($isCorrect, $question['question_type'] ?? null);
 
         // Remove existing answer if any
         $answers = collect($answers)
@@ -262,6 +278,7 @@ class QuizRepository
                 ->where('is_correct', true)
                 ->count();
             $teams[$teamIndex]['correct_answers'] = $correctCount;
+            $teams[$teamIndex]['score'] = ($teams[$teamIndex]['score'] ?? 0) + $scoreDelta;
             File::put($this->dataPath . '/teams.json', json_encode($teams, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
         }
 
@@ -285,13 +302,25 @@ class QuizRepository
                     'name' => $team['name'],
                     'code' => $team['code'],
                     'color' => $team['color'],
+                    'score' => $team['score'] ?? 0,
                     'correct_answers' => $correctAnswers,
                     'total_questions' => 10,
                     'percentage' => round(($correctAnswers / 10) * 100, 1),
                 ];
             })
-            ->sortByDesc('correct_answers')
+            ->sortByDesc('score')
             ->values()
             ->toArray();
+    }
+
+    private function calculateScoreDelta(bool $isCorrect, ?string $questionType): int
+    {
+        if ($isCorrect) {
+            return self::CORRECT_ANSWER_POINTS;
+        }
+
+        return $questionType === 'multiple_choice'
+            ? self::WRONG_MULTIPLE_CHOICE_PENALTY
+            : self::WRONG_DIRECT_ANSWER_PENALTY;
     }
 }

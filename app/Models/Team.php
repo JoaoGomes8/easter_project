@@ -7,10 +7,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Team extends Model
 {
-    protected $fillable = ['name', 'code', 'color', 'password', 'correct_answers', 'is_winner'];
+    protected $fillable = ['name', 'code', 'color', 'password', 'correct_answers', 'score', 'is_winner'];
 
     protected $casts = [
         'is_winner' => 'boolean',
+        'score' => 'integer',
     ];
 
     public function answers(): HasMany

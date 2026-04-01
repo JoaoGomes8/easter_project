@@ -368,6 +368,15 @@
             >
                 📊 Pontuações
             </a>
+            <form action="{{ route('home.logout') }}" method="POST" class="inline-block">
+                @csrf
+                <button
+                    type="submit"
+                    class="px-6 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition font-bold"
+                >
+                    Sair
+                </button>
+            </form>
         </div>
     </div>
 

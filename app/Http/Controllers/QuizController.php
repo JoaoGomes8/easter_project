@@ -25,12 +25,14 @@ class QuizController extends Controller
         $teamId = session('team_id');
         $teamName = session('team_name');
         $teamAnswers = $this->repository->getTeamAnswers($teamId);
+        $team = $this->repository->getTeamById($teamId);
 
         return view('quiz-new', [
             'questions' => $questions,
             'teamId' => $teamId,
             'teamName' => $teamName,
             'teamAnswers' => $teamAnswers,
+            'teamScore' => $team['score'] ?? 0,
         ]);
     }
 
@@ -72,13 +74,16 @@ class QuizController extends Controller
             }
         }
 
-        $this->repository->saveAnswer($teamId, $questionId, $rawUserAnswer, $isCorrect);
+        $saveResult = $this->repository->saveAnswer($teamId, $questionId, $rawUserAnswer, $isCorrect, $question);
 
         $response = [
             'success' => true,
             'is_correct' => $isCorrect,
             'hint' => $question['hint'],
             'explanation' => $question['explanation'],
+            'score_delta' => $saveResult['score_delta'] ?? 0,
+            'current_score' => $saveResult['score'] ?? 0,
+            'already_solved' => $saveResult['already_solved'] ?? false,
         ];
 
         // Adicionar binário se a resposta está correta
