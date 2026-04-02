@@ -18,6 +18,7 @@ Route::post('/quiz/submit', [QuizController::class, 'submitAnswer'])->name('quiz
 Route::get('/game', [BinaryGameController::class, 'show'])->name('game.show');
 Route::post('/game/submit', [BinaryGameController::class, 'submit'])->name('game.submit');
 Route::post('/game/validate-binary', [BinaryGameController::class, 'validateBinaryGuess'])->name('game.validate-binary');
+Route::get('/game/guessed', [BinaryGameController::class, 'getGuessedIds'])->name('game.guessed');
 
 Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 Route::get('/api/progress', [DashboardController::class, 'getProgress'])->name('dashboard.progress');

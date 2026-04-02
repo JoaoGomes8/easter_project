@@ -34,7 +34,7 @@ class DatabaseQuizRepository
                 'question_number' => 1,
                 'question' => 'O que significa a sigla HTML?',
                 'correct_answer' => 'HyperText Markup Language',
-                'password' => 'cesae',
+                'password' => 'BUNNY',
                 'hint' => 'A linguagem padrão para criar páginas web',
                 'explanation' => 'HTML é HyperText Markup Language, a linguagem fundamental da web.',
                 'binary_code' => '01110000',
@@ -50,7 +50,7 @@ class DatabaseQuizRepository
                 'question_number' => 2,
                 'question' => 'Qual é a função principal de um sistema operativo?',
                 'correct_answer' => 'Gerir os recursos de hardware e software do computador',
-                'password' => 'cesae',
+                'password' => 'EGG',
                 'hint' => 'Gerencia todos os recursos do seu computador',
                 'explanation' => 'O sistema operativo é responsável por gerir hardware e software.',
                 'binary_code' => '01100001',
@@ -66,7 +66,7 @@ class DatabaseQuizRepository
                 'question_number' => 3,
                 'question' => 'Qual destas é uma linguagem de programação cujo nome é partilhado com uma cobra?',
                 'correct_answer' => 'Python',
-                'password' => 'cesae',
+                'password' => 'BASKET',
                 'hint' => 'Um nome de um animal que é também uma serpente',
                 'explanation' => 'Python é uma linguagem de programação muito popular que tem o nome de uma cobra.',
                 'binary_code' => '01110011',
@@ -82,7 +82,7 @@ class DatabaseQuizRepository
                 'question_number' => 4,
                 'question' => 'Qual é a unidade básica de informação num computador?',
                 'correct_answer' => 'Bit',
-                'password' => 'cesae',
+                'password' => 'FESTIVE',
                 'hint' => 'A unidade mais pequena que um computador pode processar',
                 'explanation' => 'O bit (binary digit) é a unidade básica de informação digital.',
                 'binary_code' => '01100011',
@@ -98,7 +98,7 @@ class DatabaseQuizRepository
                 'question_number' => 5,
                 'question' => 'Quantos bits compõem um byte?',
                 'correct_answer' => '8',
-                'password' => 'cesae',
+                'password' => 'CHOCOLATE',
                 'hint' => 'Um byte tem sempre a mesma quantidade de bits.',
                 'explanation' => 'Um byte é composto por 8 bits.',
                 'binary_code' => '01101111',
@@ -107,7 +107,7 @@ class DatabaseQuizRepository
                 'question_number' => 6,
                 'question' => 'Em qual linguagem foi originalmente desenvolvido o Laravel?',
                 'correct_answer' => 'php',
-                'password' => 'cesae',
+                'password' => 'CANDY',
                 'hint' => 'Uma linguagem de servidor web muito popular',
                 'explanation' => 'Laravel é um framework desenvolvido em PHP.',
                 'binary_code' => '01100001',
@@ -116,7 +116,7 @@ class DatabaseQuizRepository
                 'question_number' => 7,
                 'question' => 'Qual dos seguintes protocolos é utilizado para enviar emails?',
                 'correct_answer' => 'SMTP',
-                'password' => 'cesae',
+                'password' => 'DUCKLING',
                 'hint' => 'O protocolo padrão para enviar correios eletrónicos',
                 'explanation' => 'SMTP (Simple Mail Transfer Protocol) é usado para enviar emails.',
                 'binary_code' => '01100011',
@@ -132,7 +132,7 @@ class DatabaseQuizRepository
                 'question_number' => 8,
                 'question' => 'Em programação orientada a objetos, como se chama o mecanismo que permite uma classe herdar características de outra?',
                 'correct_answer' => 'Herança',
-                'password' => 'cesae',
+                'password' => 'EASTER',
                 'hint' => 'Uma classe pode herdar propriedades de outra classe',
                 'explanation' => 'Herança (Inheritance) permite que uma classe reutilize código de outra.',
                 'binary_code' => '01100101',
@@ -148,7 +148,7 @@ class DatabaseQuizRepository
                 'question_number' => 9,
                 'question' => 'Qual a linguagem padrão para consultar e gerir bases de dados relacionais?',
                 'correct_answer' => 'SQL',
-                'password' => 'cesae',
+                'password' => 'JESUS',
                 'hint' => 'A linguagem usada para consultar bases de dados',
                 'explanation' => 'SQL (Structured Query Language) é a linguagem padrão para bases de dados.',
                 'binary_code' => '01110011',
@@ -157,7 +157,7 @@ class DatabaseQuizRepository
                 'question_number' => 10,
                 'question' => 'Qual é a porta padrão para o protocolo SSH?',
                 'correct_answer' => '22',
-                'password' => 'cesae',
+                'password' => 'SPRING',
                 'hint' => 'Um número de porta de rede',
                 'explanation' => 'A porta 22 é a porta padrão para SSH (Secure Shell).',
                 'binary_code' => '01100001',
@@ -173,7 +173,7 @@ class DatabaseQuizRepository
                 'question_number' => 11,
                 'question' => 'Qual é a linguagem de estilo usada para formatar páginas web?',
                 'correct_answer' => 'Cascading Style Sheets',
-                'password' => 'cesae',
+                'password' => 'EASTER-GIFT',
                 'hint' => 'Utilizada para formatar HTML nas páginas web',
                 'explanation' => 'CSS (Cascading Style Sheets) é usada para estilizar páginas web.',
                 'binary_code' => '01100101',
@@ -236,6 +236,7 @@ class DatabaseQuizRepository
             'correct_answers' => 0,
             'score' => 0,
             'is_winner' => false,
+            'phrase_game_completed' => false,
         ]);
 
         return $team->toArray();
@@ -318,6 +319,8 @@ class DatabaseQuizRepository
             'score' => $team->score + $scoreDelta,
         ]);
 
+        $this->syncWinners();
+
         $team->refresh();
 
         return [
@@ -340,9 +343,36 @@ class DatabaseQuizRepository
                     'score' => $team->score,
                     'correct_answers' => $team->correct_answers,
                     'is_winner' => (bool) $team->is_winner,
+                    'phrase_game_completed' => (bool) $team->phrase_game_completed,
                 ];
             })
             ->toArray();
+    }
+
+    public function markPhraseGameCompleted(int $teamId): array
+    {
+        $team = Team::find($teamId);
+
+        if (!$team) {
+            return [
+                'phrase_game_completed' => false,
+                'is_winner' => false,
+            ];
+        }
+
+        if (!$team->phrase_game_completed) {
+            $team->update([
+                'phrase_game_completed' => true,
+            ]);
+        }
+
+        $this->syncWinners();
+        $team->refresh();
+
+        return [
+            'phrase_game_completed' => (bool) $team->phrase_game_completed,
+            'is_winner' => (bool) $team->is_winner,
+        ];
     }
 
     private function calculateScoreDelta(bool $isCorrect, ?string $questionType): int
@@ -354,5 +384,32 @@ class DatabaseQuizRepository
         return $questionType === 'multiple_choice'
             ? self::WRONG_MULTIPLE_CHOICE_PENALTY
             : self::WRONG_DIRECT_ANSWER_PENALTY;
+    }
+
+    private function syncWinners(): void
+    {
+        $totalQuestions = count($this->getAllQuestions());
+
+        Team::query()->update(['is_winner' => false]);
+
+        if ($totalQuestions === 0) {
+            return;
+        }
+
+        $eligibleTeams = Team::query()
+            ->where('phrase_game_completed', true)
+            ->where('correct_answers', '>=', $totalQuestions);
+
+        if (!$eligibleTeams->exists()) {
+            return;
+        }
+
+        $highestScore = (clone $eligibleTeams)->max('score');
+
+        Team::query()
+            ->where('phrase_game_completed', true)
+            ->where('correct_answers', '>=', $totalQuestions)
+            ->where('score', $highestScore)
+            ->update(['is_winner' => true]);
     }
 }

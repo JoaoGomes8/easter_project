@@ -127,7 +127,7 @@
         <!-- Back Button -->
         <div class="mt-8 text-center">
             <a
-                href="{{ route('home') }}"
+                href="{{ session('team_id') ? route('quiz.index') : route('home') }}"
                 class="inline-block px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition font-bold"
             >
                 ← Voltar
@@ -184,6 +184,12 @@
                     ? '<span class="winner-badge"><span class="winner-crown">👑</span> WINNER</span>'
                     : '';
                 const medalClass = team.is_winner ? 'winner-medal' : '';
+                const phraseStatusClass = team.phrase_game_completed
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-gray-100 text-gray-700';
+                const phraseStatusText = team.phrase_game_completed
+                    ? 'Jogo da frase: completo'
+                    : 'Jogo da frase: não completo';
 
                 return `
                     <div class="team-row ${winnerClass} p-6 flex items-center justify-between hover:bg-purple-50 transition" style="animation-delay: ${index * 100}ms;">
@@ -192,6 +198,7 @@
                             <div>
                                 <h3 class="text-xl font-bold text-gray-800">${team.name}</h3>
                                 ${winnerBadge}
+                                <p class="mt-2 inline-flex items-center rounded-full px-3 py-1 text-xs font-bold ${phraseStatusClass}">${phraseStatusText}</p>
                             </div>
                         </div>
 

@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Team;
 use App\Services\DatabaseQuizRepository;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -26,6 +25,9 @@ class BinaryGameController extends Controller
         $teamName = session('team_name');
         $teamAnswers = $this->repository->getTeamAnswers($teamId);
 
+        $team = \App\Models\Team::find($teamId);
+        $guessedQuestionIds = $team->guessed_question_ids ?? [];
+
         // Coletar binários desbloqueados com informações da letra
         $unlockedBinaries = [];
         foreach ($teamAnswers as $answer) {
@@ -36,16 +38,21 @@ class BinaryGameController extends Controller
                     $unlockedBinaries[] = [
                         'binary' => $question['binary_code'],
                         'letter' => $letter,
-                        'question_id' => $answer['question_id']
+                        'question_id' => $answer['question_id'],
+                        'is_guessed' => in_array($answer['question_id'], $guessedQuestionIds)
                     ];
                 }
             }
         }
 
+        // Calcular posições reveladas baseado nos question_ids acertados
+        $revealedPositions = $this->calculateRevealedPositions($unlockedBinaries, $guessedQuestionIds);
+
         return view('binary-game', [
             'teamName' => $teamName,
             'unlockedBinaries' => $unlockedBinaries,
             'totalQuestions' => count(array_filter($teamAnswers, fn($a) => $a['is_correct'])),
+            'revealedPositions' => $revealedPositions,
         ]);
     }
 
@@ -77,11 +84,15 @@ class BinaryGameController extends Controller
         $correctAnswer = 'PASCOA CESAE';
 
         if ($answer === $correctAnswer) {
-            Team::where('id', $teamId)->update(['is_winner' => true]);
+            $result = $this->repository->markPhraseGameCompleted($teamId);
+
+            $message = $result['is_winner']
+                ? '🎉 Parabéns! Desbloqueaste a frase secreta!\n\n🏆 A tua equipa cumpre as condições de vitória neste momento: todas as perguntas certas, jogo da frase completo e maior pontuação. 🏆'
+                : '🎉 Parabéns! Desbloqueaste a frase secreta!\n\nA tua equipa concluiu o jogo da frase. Para ganhar, também precisa de terminar com a maior pontuação.';
 
             return response()->json([
                 'success' => true,
-                'message' => '🎉 Parabéns! Desbloqueaste a frase secreta!\n\n🏆 Conseguiste completar o desafio CESAE DIGITAL! 🏆'
+                'message' => $message,
             ]);
         } else {
             return response()->json([
@@ -96,10 +107,12 @@ class BinaryGameController extends Controller
         $request->validate([
             'binary' => 'required|string',
             'guess' => 'required|string|size:1',
+            'question_id' => 'required|integer',
         ]);
 
         $binary = $request->input('binary');
         $guess = strtoupper($request->input('guess'));
+        $questionId = $request->input('question_id');
 
         $correctLetter = $this->binaryToUpperLetter($binary);
 
@@ -111,6 +124,19 @@ class BinaryGameController extends Controller
         }
 
         if ($guess === $correctLetter) {
+            // Guardar o question_id na lista de acertados
+            $teamId = session('team_id');
+            if ($teamId) {
+                $team = \App\Models\Team::find($teamId);
+                if ($team) {
+                    $guessedIds = $team->guessed_question_ids ?? [];
+                    if (!in_array($questionId, $guessedIds)) {
+                        $guessedIds[] = $questionId;
+                        $team->update(['guessed_question_ids' => $guessedIds]);
+                    }
+                }
+            }
+
             return response()->json([
                 'success' => true,
                 'letter' => $correctLetter,
@@ -148,5 +174,62 @@ class BinaryGameController extends Controller
 
         return $correctQuestionIds->count() === $questions->count();
     }
+
+    private function calculateRevealedPositions(array $unlockedBinaries, array $guessedQuestionIds): array
+    {
+        $PHRASE = 'PASCOA CESAE';
+        $PHRASE_POSITIONS = [
+            'P' => [0],
+            'A' => [1, 5, 9],
+            'S' => [2, 10],
+            'C' => [3, 7],
+            'O' => [4],
+            ' ' => [6],
+            'E' => [8, 11]
+        ];
+
+        $revealedPositions = [];
+        $letterCountByPosition = [];
+
+        // Contar quantos binários de cada letra foram acertados
+        $letterCounts = [];
+        foreach ($unlockedBinaries as $binary) {
+            if (in_array($binary['question_id'], $guessedQuestionIds)) {
+                $letter = $binary['letter'];
+                $letterCounts[$letter] = ($letterCounts[$letter] ?? 0) + 1;
+            }
+        }
+
+        // Para cada letra com count, revelar as primeiras N posições
+        foreach ($letterCounts as $letter => $count) {
+            if (isset($PHRASE_POSITIONS[$letter])) {
+                $positions = $PHRASE_POSITIONS[$letter];
+                // Revelar as primeiras $count posições dessa letra
+                for ($i = 0; $i < min($count, count($positions)); $i++) {
+                    $revealedPositions[] = $positions[$i];
+                }
+            }
+        }
+
+        return $revealedPositions;
+    }
+
+    public function getGuessedIds()
+    {
+        if (!session('team_id')) {
+            return response()->json([
+                'success' => false,
+                'guessed_ids' => []
+            ], 403);
+        }
+
+        $team = \App\Models\Team::find(session('team_id'));
+
+        return response()->json([
+            'success' => true,
+            'guessed_ids' => $team->guessed_question_ids ?? []
+        ]);
+    }
 }
+
 

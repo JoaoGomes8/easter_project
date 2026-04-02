@@ -298,17 +298,25 @@
                                     autocorrect="off"
                                     autocapitalize="characters"
                                     spellcheck="false"
+                                    @if ($item['is_guessed']) disabled @endif
                                 />
                                 <button
                                     class="submit-letter-btn"
                                     onclick="checkLetter({{ $item['question_id'] }})"
+                                    @if ($item['is_guessed']) disabled @endif
                                 >
                                     ✓
                                 </button>
                             </div>
-                            <div class="guessed-letter" id="guessed-{{ $item['question_id'] }}" style="display: none;">
-                                <span id="letter-{{ $item['question_id'] }}"></span>
-                            </div>
+                            @if ($item['is_guessed'])
+                                <div class="guessed-letter" style="display: block;">
+                                    <span id="letter-{{ $item['question_id'] }}">{{ $item['letter'] }}</span>
+                                </div>
+                            @else
+                                <div class="guessed-letter" id="guessed-{{ $item['question_id'] }}" style="display: none;">
+                                    <span id="letter-{{ $item['question_id'] }}"></span>
+                                </div>
+                            @endif
                         </div>
                     @endforeach
                 @else
@@ -393,6 +401,13 @@
             'E': [8, 11]
         };
 
+        // Matriz de binários desbloqueados (enviados do backend)
+        const unlockedBinaries = @json($unlockedBinaries);
+
+        // Inicializar guessedQuestionIds a partir dos dados do backend
+        let guessedQuestionIds = unlockedBinaries
+            .filter(binary => binary.is_guessed)
+            .map(binary => binary.question_id);
         let revealedPositions = new Set();
 
         function copyBinary(element, binary) {
@@ -406,10 +421,38 @@
             }, 1500);
         }
 
+        function calculateRevealedPositions() {
+            revealedPositions.clear();
+
+            // Contar quantos binários de cada letra foram acertados
+            const letterCounts = {};
+            unlockedBinaries.forEach(binary => {
+                if (guessedQuestionIds.includes(binary.question_id)) {
+                    const letter = binary.letter;
+                    letterCounts[letter] = (letterCounts[letter] || 0) + 1;
+                }
+            });
+
+            // Para cada letra com count, revelar as primeiras N posições
+            Object.entries(letterCounts).forEach(([letter, count]) => {
+                if (PHRASE_POSITIONS[letter]) {
+                    for (let i = 0; i < Math.min(count, PHRASE_POSITIONS[letter].length); i++) {
+                        revealedPositions.add(PHRASE_POSITIONS[letter][i]);
+                    }
+                }
+            });
+
+            // Espaço sempre revelado
+            if (PHRASE_POSITIONS[' ']) {
+                PHRASE_POSITIONS[' '].forEach(pos => revealedPositions.add(pos));
+            }
+        }
+
         function checkLetter(questionId) {
             const input = document.getElementById(`input-${questionId}`);
             const binary = input.dataset.binary;
             const guess = input.value.toUpperCase().trim();
+            questionId = parseInt(questionId); // Converter para número
 
             if (!guess) {
                 showError('Por favor, insere uma letra!');
@@ -424,40 +467,53 @@
                 },
                 body: JSON.stringify({
                     binary: binary,
-                    guess: guess
+                    guess: guess,
+                    question_id: questionId
                 })
             })
             .then(response => response.json().then(data => ({ status: response.ok, data: data })))
             .then(({ status, data }) => {
                 if (status && data.success) {
-                    // Letra correta!
-                    const letter = data.letter;
-                    revealNextPosition(letter);
+                    // Letra correta! Sincronizar com o backend
+                    fetch('{{ route("game.guessed") }}')
+                        .then(res => res.json())
+                        .then(result => {
+                            // Atualizar guessedQuestionIds com dados do backend
+                            guessedQuestionIds = result.guessed_ids || [];
 
-                    // Marcar item como resolvido
-                    const item = document.getElementById(`binary-item-${questionId}`);
-                    item.classList.add('solved');
-                    input.disabled = true;
-                    document.querySelector(`#binary-item-${questionId} .submit-letter-btn`).disabled = true;
+                            // Recalcular posições reveladas
+                            calculateRevealedPositions();
 
-                    // Mostrar a letra
-                    const guessedDiv = document.getElementById(`guessed-${questionId}`);
-                    document.getElementById(`letter-${questionId}`).textContent = letter;
-                    guessedDiv.style.display = 'block';
+                            // Marcar item como resolvido
+                            const item = document.getElementById(`binary-item-${questionId}`);
+                            item.classList.add('solved');
+                            input.disabled = true;
+                            document.querySelector(`#binary-item-${questionId} .submit-letter-btn`).disabled = true;
 
-                    // Atualizar frase
-                    updatePhrase();
+                            // Mostrar a letra
+                            const guessedDiv = document.getElementById(`guessed-${questionId}`);
+                            const letter = data.letter;
+                            document.getElementById(`letter-${questionId}`).textContent = letter;
+                            guessedDiv.style.display = 'block';
 
-                    // Verificar se completou
-                    setTimeout(() => checkIfCompleted(), 500);
+                            // Atualizar frase
+                            updatePhrase();
 
-                    showSuccess('✅ ' + data.message);
+                            // Verificar se completou
+                            setTimeout(() => checkIfCompleted(), 500);
 
-                    // Focar no próximo input
-                    const nextInput = input.closest('div').nextElementSibling?.querySelector('.letter-input');
-                    if (nextInput && !nextInput.disabled) {
-                        nextInput.focus();
-                    }
+                            showSuccess('✅ ' + data.message);
+
+                            // Focar no próximo input
+                            const nextInput = input.closest('div').nextElementSibling?.querySelector('.letter-input');
+                            if (nextInput && !nextInput.disabled) {
+                                nextInput.focus();
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Erro ao sincronizar:', error);
+                            showError('Erro ao atualizar dados!');
+                        });
                 } else {
                     showError(data.message || '❌ Incorreto!');
                     input.value = '';
@@ -502,16 +558,6 @@
                 return true;
             }
             return false;
-        }
-
-        function revealNextPosition(letter) {
-            const chars = PHRASE.split('');
-            for (let i = 0; i < chars.length; i++) {
-                if (chars[i] === letter && !revealedPositions.has(i)) {
-                    revealedPositions.add(i);
-                    return;
-                }
-            }
         }
 
         function submitAnswer() {
@@ -588,15 +634,28 @@
 
         // Focus no primeiro input ao carregar
         document.addEventListener('DOMContentLoaded', function() {
-            // Espaços começam sempre preenchidos
-            PHRASE.split('').forEach((char, index) => {
-                if (char === ' ') {
-                    revealedPositions.add(index);
+            // Inicializar guessed_question_ids com as que já estão desabilitadas (da BD)
+            document.querySelectorAll('.letter-input:disabled').forEach(input => {
+                const questionId = parseInt(input.id.replace('input-', ''));
+                if (!guessedQuestionIds.includes(questionId)) {
+                    guessedQuestionIds.push(questionId);
                 }
             });
 
+            // Calcular posições reveladas baseado nos question_ids já acertados
+            calculateRevealedPositions();
+
             // Atualizar frase com letras já acertadas
             updatePhrase();
+
+            // Marcar itens já resolvidos como "solved"
+            document.querySelectorAll('.letter-input:disabled').forEach(input => {
+                const questionId = input.id.replace('input-', '');
+                const item = document.getElementById(`binary-item-${questionId}`);
+                if (item) {
+                    item.classList.add('solved');
+                }
+            });
 
             // Verificar se já está completo
             checkIfCompleted();

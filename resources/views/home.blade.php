@@ -31,6 +31,10 @@
             <h1 class="text-3xl font-bold text-purple-600 mb-2">🎉 Páscoa & Programação 🎉</h1>
             <p class="text-gray-600 mb-8">Quiz interativo com 10 perguntas sobre Páscoa e Programação</p>
 
+            <div class="bg-amber-50 border-l-4 border-amber-400 p-4 rounded text-sm text-amber-900 text-left mb-6">
+                <p><strong>Como ganhar:</strong> a equipa vencedora tem de terminar com mais pontos, acertar todas as perguntas e completar o jogo da frase.</p>
+            </div>
+
             <!-- Step 1: Team Name -->
             <div id="step-1" class="space-y-4">
                 <div>
